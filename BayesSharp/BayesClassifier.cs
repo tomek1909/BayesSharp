@@ -5,7 +5,6 @@ using System.Linq;
 using System.Text;
 using BayesSharp.Combiners;
 using BayesSharp.Tokenizers;
-using Newtonsoft.Json;
 
 namespace BayesSharp
 {
@@ -111,47 +110,47 @@ namespace BayesSharp
         /// Save Bayes Text Classifier into a file
         /// </summary>
         /// <param name="path">The file to write to</param>
-        public void Save(string path)
-        {
-            using (var streamWriter = new StreamWriter(path, false, Encoding.UTF8))
-            {
-                JsonSerializer.Create().Serialize(streamWriter, _tags);
-            }
-        }
+        //public void Save(string path)
+        //{
+        //    using (var streamWriter = new StreamWriter(path, false, Encoding.UTF8))
+        //    {
+        //        JsonSerializer.Create().Serialize(streamWriter, _tags);
+        //    }
+        //}
 
         /// <summary>
         /// Load Bayes Text Classifier from a file
         /// </summary>
         /// <param name="path">The file to open for reading</param>
-        public void Load(string path)
-        {
-            using (var streamReader = new StreamReader(path, Encoding.UTF8))
-            {
-                using (var jsonTextReader = new JsonTextReader(streamReader))
-                {
-                    _tags = JsonSerializer.Create().Deserialize<TagDictionary<TTokenType, TTagType>>(jsonTextReader);
-                }
-            }
-            _mustRecache = true;
-        }
+        //public void Load(string path)
+        //{
+        //    using (var streamReader = new StreamReader(path, Encoding.UTF8))
+        //    {
+        //        using (var jsonTextReader = new JsonTextReader(streamReader))
+        //        {
+        //            _tags = JsonSerializer.Create().Deserialize<TagDictionary<TTokenType, TTagType>>(jsonTextReader);
+        //        }
+        //    }
+        //    _mustRecache = true;
+        //}
 
         /// <summary>
         /// Import Bayes Text Classifier from a json string
         /// </summary>
         /// <param name="json">The json content to be loaded</param>
-        public void ImportJsonData(string json)
-        {
-            _tags = JsonConvert.DeserializeObject<TagDictionary<TTokenType, TTagType>>(json);
-            _mustRecache = true;
-        }
+        //public void ImportJsonData(string json)
+        //{
+        //    _tags = JsonConvert.DeserializeObject<TagDictionary<TTokenType, TTagType>>(json);
+        //    _mustRecache = true;
+        //}
 
         /// <summary>
         /// Export Bayes Text Classifier to a json string
         /// </summary>
-        public string ExportJsonData()
-        {
-            return JsonConvert.SerializeObject(_tags);
-        }
+        //public string ExportJsonData()
+        //{
+        //    return JsonConvert.SerializeObject(_tags);
+        //}
 
         /// <summary>
         /// Return a sorted list of Tag Ids
@@ -169,6 +168,16 @@ namespace BayesSharp
         public void Train(TTagType tagId, string input)
         {
             var tokens = _tokenizer.Tokenize(input);
+            var tag = GetAndAddIfNotFound(_tags.Items, tagId);
+            _train(tag, tokens);
+            _tags.SystemTag.TrainCount += 1;
+            tag.TrainCount += 1;
+            _mustRecache = true;
+        }
+
+        public void Train(TTagType tagId, IEnumerable<TTokenType> toks)
+        {
+            var tokens = toks;
             var tag = GetAndAddIfNotFound(_tags.Items, tagId);
             _train(tag, tokens);
             _tags.SystemTag.TrainCount += 1;
@@ -215,6 +224,24 @@ namespace BayesSharp
                 }
             }
             return stats.OrderByDescending(s => s.Value).ToDictionary(s => s.Key, pair => pair.Value);
+        }
+
+        public List<Tuple<TTagType, double>> Classify(IEnumerable<TTokenType> toks)
+        {
+            var tokens = toks;
+            var tags = CreateCacheAnsGetTags();
+
+            var stats = new Dictionary<TTagType, double>();
+
+            foreach (var tag in tags.Items)
+            {
+                var probs = GetProbabilities(tag.Value, tokens).ToList();
+                if (probs.Count() != 0)
+                {
+                    stats[tag.Key] = _combiner.Combine(probs);
+                }
+            }
+            return stats.OrderByDescending(s => s.Value).Select(x => new Tuple<TTagType, double>(x.Key, x.Value)).ToList();
         }
 
         #region Private Methods
